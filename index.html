@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valve Timing Diagram</title>
+<style>
+  body{margin:0;background:#f7f8fa;color:#111;font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  .wrap{max-width:1200px;margin:20px auto 40px;padding:0 16px}
+  h1{font-size:20px;margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start;}
+  .controls-column{display:flex; flex-direction:column; gap:16px;}
+  .card{background:#fff;border:1px solid #e5e9f0;border-radius:12px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+  .row, .row-labeled{display:grid;grid-template-columns:1fr 130px;gap:8px;align-items:center;margin:6px 0}
+  .row-labeled label:first-child {margin-bottom: -4px;}
+  h3.card-title{font-size:16px; margin: 4px 0 12px 0; color:#334155;}
+  label{font-size:12px;color:#4a5568}
+  input[type=number],select,button{background:#fff;color:#111;border:1px solid #cbd5e0;border-radius:8px;padding:8px;width:100%;box-sizing:border-box;}
+  button{cursor:pointer; background: #4365dc; color: white; border-color: #4365dc;}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  canvas{background:#fff;border:1px solid #e2e8f0;border-radius:10px;display:block;width:100%;height:auto}
+  .legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .badge{background:#f0f4f8;border:1px solid #d9e2ec;padding:6px 10px;border-radius:999px}
+  .legend .color-box{display:inline-block;width:12px;height:12px;margin-right:4px;border:1px solid #000;}
+  #summaryTable{width:100%;border-collapse:collapse;margin:12px 0;}
+  #summaryTable th, #summaryTable td{border:1px solid #e2e8f0;padding:8px;text-align:center;font-size:13px;}
+  #summaryTable th{background:#f8fafc;}
+  
+  .calc-item {
+    margin-bottom: 10px;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+    padding: 6px 10px;
+  }
+  .calc-item:last-child { margin-bottom: 0; }
+  .calc-item .formula {
+    margin: 2px 0;
+    font-size: 12px;
+    color: #64748b;
+    font-family: Consolas, monaco, monospace;
+  }
+  .calc-item .calculation {
+    margin: 2px 0;
+    font-size: 13px;
+    color: #1e293b;
+    font-family: Consolas, monaco, monospace;
+  }
+  .calc-item strong {
+    color: #1e40af;
+    float: right;
+  }
+
+  @media(max-width: 980px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">气门正时绘图</h1>
+  <div class="grid">
+    <div class="controls-column">
+        <div class="card">
+          <div class="row-labeled">
+            <label id="lblLangTitle">语言</label>
+            <span></span>
+            <select id="lang">
+              <option value="zh">中文</option>
+              <option value="en">English</option>
+              <option value="ms">Bahasa Melayu</option>
+            </select>
+          </div>
+          <div class="row"><label id="l1">进气门开启 (BTDC)</label><input id="ivo" type="number" value="18" min="0" max="180" step="1"></div>
+          <div class="row"><label id="l2">进气门关闭 (ABDC)</label><input id="ivc" type="number" value="58" min="0" max="180" step="1"></div>
+          <div class="row"><label id="l3">排气门开启 (BBDC)</label><input id="evo" type="number" value="58" min="0" max="180" step="1"></div>
+          <div class="row"><label id="l4">排气门关闭 (ATDC)</label><input id="evc" type="number" value="18" min="0" max="180" step="1"></div>
+          <hr style="border:0; border-top:1px solid #e5e9f0; margin: 12px 0;">
+          <div class="row"><label id="l5i">进气最大升程 (mm)</label><input id="lift_i" type="number" value="12" min="1" max="50" step="0.1"></div>
+          <div class="row"><label id="l6i">开启到最大升程角度 (°)</label><input id="deg_im" type="number" value="128" min="1" max="400" step="1"></div>
+           <hr style="border:0; border-top:1px solid #e5e9f0; margin: 12px 0;">
+          <div class="row"><label id="l5e">排气最大升程 (mm)</label><input id="lift_e" type="number" value="11.5" min="1" max="50" step="0.1"></div>
+          <div class="row"><label id="l6e">开启到最大升程角度 (°)</label><input id="deg_em" type="number" value="128" min="1" max="400" step="1"></div>
+          <div class="toolbar">
+            <label><input id="auto" type="checkbox" checked> <span id="lblAuto">自动刷新</span></label>
+            <button id="gen">生成</button>
+          </div>
+        </div>
+        <div class="card" id="summaryCard">
+            <h3 class="card-title" id="jadualTitle">数据总览</h3>
+            <table id="summaryTable">
+                <thead><tr><th id="h_valve">气门</th><th id="h_open">开启</th><th id="h_close">关闭</th></tr></thead>
+                <tbody>
+                    <tr><td id="h_in">进气</td><td id="td_ivo">18° BTDC</td><td id="td_ivc">58° ABDC</td></tr>
+                    <tr><td id="h_ex">排气</td><td id="td_evo">58° BBDC</td><td id="td_evc">18° ATDC</td></tr>
+                </tbody>
+            </table>
+            <hr style="border:0; border-top:1px solid #e5e9f0; margin: 12px 0;">
+            <h3 class="card-title" id="calcTitle">计算过程</h3>
+            <div id="calcDetails"></div>
+        </div>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <strong id="t1">圆形正时图</strong>
+        <button id="saveCircle">PNG</button>
+        <strong id="t2" style="margin-left:auto;">升程曲线</strong>
+        <button id="saveCurve">PNG</button>
+        <span style="flex:1"></span>
+        <button id="savePDF">PDF</button>
+      </div>
+      <canvas id="circle" width="900" height="900"></canvas>
+      <div style="height:10px"></div>
+      <canvas id="curve" width="1100" height="720"></canvas>
+      <div class="legend">
+        <span class="badge"><span class="color-box" style="background:#4a9cff"></span><span id="lg1Text">进气</span></span>
+        <span class="badge"><span class="color-box" style="background:#ff6b6b"></span><span id="lg2Text">排气</span></span>
+        <span class="badge"><span class="color-box" style="background:#00bcd4"></span><span id="lg3Text">压缩</span></span>
+        <span class="badge"><span class="color-box" style="background:#ff9800"></span><span id="lg4Text">做功</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Language strings for the UI
+const langData = {
+  zh: {
+    title: "气门正时绘图", lblLangTitle: "语言", l1: "进气门开启 (BTDC)", l2: "进气门关闭 (ABDC)", l3: "排气门开启 (BBDC)", l4: "排气门关闭 (ATDC)",
+    l5i: "进气最大升程 (mm)", l6i: "开启到最大升程角度 (°)", l5e: "排气最大升程 (mm)", l6e: "开启到最大升程角度 (°)",
+    auto: "自动刷新", gen: "生成", t1: "圆形正时图", t2: "升程曲线",
+    lg1: "进气", lg2: "排气", lg3: "压缩", lg4: "做功",
+    jadualTitle: "数据总览", calcTitle: "计算过程",
+    h_valve: "气门", h_open: "开启", h_close: "关闭", h_in: "进气", h_ex: "排气",
+    formula_intake: "进气持续 = 180° + IVO + IVC",
+    formula_exhaust: "排气持续 = 180° + EVO + EVC",
+    formula_comp: "压缩持续 = 180° - IVC",
+    formula_power: "做功持续 = 180° - EVO",
+    formula_overlap: "重叠 = IVO + EVC",
+    lab: { IVO: "IVO", IVC: "IVC", EVO: "EVO", EVC: "EVC", Overlap: "重叠", Intake: "进气", Exhaust: "排气", TDC: "TDC", BDC: "BDC", Compression: "压缩", Power: "做功", Lift: "升程 (mm)", Degree: "曲轴角度 (°)", Duration: "持续",
+        MaxLiftAt: (l,d) => `Max: ${l}mm @ ${d}°`, IntakeDuration: (d) => `进气持续 ${d}°`, ExhaustDuration: (d) => `排气持续 ${d}°`, OverlapLabel: (d) => `重叠 ${d}°`,
+    }
+  },
+  en: {
+    title: "Valve Timing Plotter", lblLangTitle: "Language", l1: "Intake opens (BTDC)", l2: "Intake closes (ABDC)", l3: "Exhaust opens (BBDC)", l4: "Exhaust closes (ATDC)",
+    l5i: "Intake max lift (mm)", l6i: "Open to max lift (°)", l5e: "Exhaust max lift (mm)", l6e: "Open to max lift (°)",
+    auto: "Auto-update", gen: "Generate", t1: "Circular timing diagram", t2: "Lift curve",
+    lg1: "Intake", lg2: "Exhaust", lg3: "Compression", lg4: "Power",
+    jadualTitle: "Summary", calcTitle: "Calculation",
+    h_valve: "Valve", h_open: "Open", h_close: "Close", h_in: "Intake", h_ex: "Exhaust",
+    formula_intake: "Intake Duration = 180° + IVO + IVC",
+    formula_exhaust: "Exhaust Duration = 180° + EVO + EVC",
+    formula_comp: "Compression Duration = 180° - IVC",
+    formula_power: "Power Duration = 180° - EVO",
+    formula_overlap: "Overlap = IVO + EVC",
+    lab: { IVO: "IVO", IVC: "IVC", EVO: "EVO", EVC: "EVC", Overlap: "Overlap", Intake: "Intake", Exhaust: "Exhaust", TDC: "TDC", BDC: "BDC", Compression: "Compression", Power: "Power", Lift: "Lift (mm)", Degree: "Crankshaft Angle (°)", Duration: "Duration",
+        MaxLiftAt: (l,d)=>`Max: ${l}mm @ ${d}°`, IntakeDuration: (d)=>`Intake Duration ${d}°`, ExhaustDuration: (d)=>`Exhaust Duration ${d}°`, OverlapLabel: (d)=>`Overlap ${d}°`,
+    }
+  },
+  ms: {
+    title: "Pelukis Masa Injap", lblLangTitle: "Bahasa", l1: "Masuk buka (BTDC)", l2: "Masuk tutup (ABDC)", l3: "Ekzos buka (BBDC)", l4: "Ekzos tutup (ATDC)",
+    l5i: "Angkatan maks masuk (mm)", l6i: "Buka ke angkatan maks (°)", l5e: "Angkatan maks ekzos (mm)", l6e: "Buka ke angkatan maks (°)",
+    auto: "Kemas kini auto", gen: "Jana", t1: "Rajah masa bulatan", t2: "Lengkung angkatan",
+    lg1: "Masuk", lg2: "Ekzos", lg3: "Mampatan", lg4: "Kuasa",
+    jadualTitle: "Ringkasan", calcTitle: "Kiraan",
+    h_valve: "Injap", h_open: "Buka", h_close: "Tutup", h_in: "Masuk", h_ex: "Ekzos",
+    formula_intake: "Tempoh Masuk = 180° + IVO + IVC",
+    formula_exhaust: "Tempoh Ekzos = 180° + EVO + EVC",
+    formula_comp: "Tempoh Mampatan = 180° - IVC",
+    formula_power: "Tempoh Kuasa = 180° - EVO",
+    formula_overlap: "Pertindihan = IVO + EVC",
+    lab: { IVO: "IVO", IVC: "IVC", EVO: "EVO", EVC: "EVC", Overlap: "Pertindihan", Intake: "Masuk", Exhaust: "Ekzos", TDC: "TDC", BDC: "BDC", Compression: "Mampatan", Power: "Kuasa", Lift: "Angkatan (mm)", Degree: "Sudut Aci Engkol (°)", Duration: "Tempoh",
+        MaxLiftAt: (l,d)=>`Maks: ${l}mm @ ${d}°`, IntakeDuration: (d)=>`Tempoh Masuk ${d}°`, ExhaustDuration: (d)=>`Tempoh Ekzos ${d}°`, OverlapLabel: (d)=>`Pertindihan ${d}°`,
+    }
+  }
+};
+
+// Helper functions
+function $(id) { return document.getElementById(id) }
+function num(id) { const v = Number($(id).value); return isFinite(v) ? v : 0; }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+
+function setLang(code) {
+  const t = langData[code] || langData.en;
+  const ids = ["title", "lblLangTitle", "l1", "l2", "l3", "l4", "l5i", "l6i", "l5e", "l6e", "lblAuto", "gen", "t1", "t2", "lg1Text", "lg2Text", "lg3Text", "lg4Text", "jadualTitle", "calcTitle", "h_valve", "h_open", "h_close", "h_in", "h_ex"];
+  
+  for(let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    if ($(id)) {
+        $(id).textContent = t[id.replace("Text","")] || t[id];
+    }
+  }
+  
+  update();
+}
+
+// Calculate all valve timing data from inputs
+function getValveData() {
+  const IVO = clamp(num("ivo"), 0, 180), IVC = clamp(num("ivc"), 0, 180);
+  const EVO = clamp(num("evo"), 0, 180), EVC = clamp(num("evc"), 0, 180);
+  const lift_i = clamp(num("lift_i"), 0.1, 200), deg_im = clamp(num("deg_im"), 1, 400);
+  const lift_e = clamp(num("lift_e"), 0.1, 200), deg_em = clamp(num("deg_em"), 1, 400);
+
+  const idur = 180 + IVO + IVC, edur = 180 + EVO + EVC, overlap = IVO + EVC;
+  const compDur = 180 - IVC, powerDur = 180 - EVO;
+  return { IVO, IVC, EVO, EVC, lift_i, deg_im, lift_e, deg_em, idur, edur, overlap, compDur, powerDur };
+}
+
+// Update the summary and calculation table
+function updateSummary() {
+    const d = getValveData();
+    const t = langData[$("lang").value] || langData.en;
+
+    $('td_ivo').textContent = `${d.IVO}° BTDC`;
+    $('td_ivc').textContent = `${d.IVC}° ABDC`;
+    $('td_evo').textContent = `${d.EVO}° BBDC`;
+    $('td_evc').textContent = `${d.EVC}° ATDC`;
+
+    const details = $('calcDetails');
+    details.innerHTML = `
+        <div class="calc-item">
+            <p class="formula">${t.formula_intake}</p>
+            <p class="calculation">= 180° + ${d.IVO}° + ${d.IVC}° <strong>= ${d.idur}°</strong></p>
+        </div>
+        <div class="calc-item">
+            <p class="formula">${t.formula_exhaust}</p>
+            <p class="calculation">= 180° + ${d.EVO}° + ${d.EVC}° <strong>= ${d.edur}°</strong></p>
+        </div>
+        <div class="calc-item">
+            <p class="formula">${t.formula_comp}</p>
+            <p class="calculation">= 180° - ${d.IVC}° <strong>= ${d.compDur > 0 ? d.compDur : 0}°</strong></p>
+        </div>
+        <div class="calc-item">
+            <p class="formula">${t.formula_power}</p>
+            <p class="calculation">= 180° - ${d.EVO}° <strong>= ${d.powerDur > 0 ? d.powerDur : 0}°</strong></p>
+        </div>
+        <div class="calc-item">
+            <p class="formula">${t.formula_overlap}</p>
+            <p class="calculation">= ${d.IVO}° + ${d.EVC}° <strong>= ${d.overlap}°</strong></p>
+        </div>
+    `;
+}
+
+// Convert polar (angle) to cartesian (x,y)
+function getPolarCoords(cx, cy, r, deg) { 
+    const rad = (deg - 90) * Math.PI / 180;
+    return [cx + Math.cos(rad) * r, cy + Math.sin(rad) * r];
+}
+
+// Main function to draw the circular diagram
+function drawCircle(d, lang = 'zh', targetCtx = null) {
+  const cv = targetCtx ? targetCtx.canvas : $("circle");
+  const ctx = targetCtx || cv.getContext("2d");
+  const W = cv.width, H = cv.height, cx = W / 2, cy = H / 2, R = W * 0.35;
+  const Rmid = R - 36, Rinner = R - 72, Roverlap = R - 108;
+  const LBL = langData[lang].lab;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+
+  // 1. Draw background arcs
+  const arcs = [
+      { r: R, s: "#e8eef7", w: 26 }, { r: Rmid, s: "#e8eef7", w: 26 }, 
+      { r: Rinner, s: "#e8eef7", w: 16 }, { r: Roverlap, s: "#e8eef7", w: 10 },
+  // 2. Draw data arcs
+      { r: R, s: "#ff6b6b", w: 26, start: 180 - d.EVO, end: 360 },
+      { r: R, s: "#ff6b6b", w: 26, start: 0, end: d.EVC },
+      { r: Rinner, s: "#4a9cff", w: 16, start: 360 - d.IVO, end: 360 },
+      { r: Rinner, s: "#4a9cff", w: 16, start: 0, end: 180 + d.IVC },
+      { r: Rmid, s: "#00bcd4", w: 26, start: 180 + d.IVC, end: 360, cond: d.compDur > 0},
+      { r: Rmid, s: "#ff9800", w: 26, start: 0, end: 180 - d.EVO, cond: d.powerDur > 0},
+      { r: Roverlap, s: "#4ade80", w: 10, start: 360 - d.IVO, end: 360, cond: d.overlap > 0 },
+      { r: Roverlap, s: "#4ade80", w: 10, start: 0, end: d.EVC, cond: d.overlap > 0 }
+  ];
+  ctx.lineCap = "butt";
+  for(let i = 0; i < arcs.length; i++) {
+      const a = arcs[i];
+      if (a.cond === false) continue;
+      ctx.strokeStyle = a.s; ctx.lineWidth = a.w; ctx.beginPath();
+      const startAngle = (a.start - 90) * Math.PI / 180;
+      const endAngle = (a.end - 90) * Math.PI / 180;
+      // Fix for arcs crossing the 0/360 boundary
+      if (a.end < a.start) { 
+          const startRad = (a.start - 90) * Math.PI / 180;
+          const endRad = (a.end + 360 - 90) * Math.PI / 180;
+          ctx.arc(cx, cy, a.r, startRad, endRad);
+      } else {
+         ctx.arc(cx, cy, a.r, startAngle, endAngle);
+      }
+      ctx.stroke();
+  }
+  
+  // 3. Draw internal duration labels (Fixed tracks to prevent overlap)
+  ctx.fillStyle = "#111"; ctx.font = `${W*0.015}px system-ui,Segoe UI,Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  
+  // Set radial distances as requested by user
+  const internalLabels = [
+    { 
+        text: `${LBL.Intake} ${d.idur}°`, 
+        r: Rinner - 25, // "In" track (closer to center)
+        angle: (360 - d.IVO + (180 + d.IVO + d.IVC)/2) % 360,
+        cond: d.idur > 0
+    },
+    { 
+        text: `${LBL.Exhaust} ${d.edur}°`, 
+        r: R - 13, // "Out" track (further from center)
+        angle: (180 - d.EVO + (180 + d.EVO + d.EVC)/2) % 360,
+        cond: d.edur > 0
+    },
+    { 
+        text: `${LBL.Compression} ${d.compDur}°`, 
+        r: Rmid - 45, // "In" track (closer to center)
+        angle: (180 + d.IVC + d.compDur / 2) % 360,
+        cond: d.compDur > 0 
+    },
+    { 
+        text: `${LBL.Power} ${d.powerDur}°`, 
+        r: Rmid - 13, // "Out" track (further from center)
+        angle: (d.powerDur / 2) % 360,
+        cond: d.powerDur > 0
+    },
+    { 
+        text: `${LBL.Overlap} ${d.overlap}°`, 
+        r: Roverlap - 25, // Innermost track
+        angle: ((360 - d.IVO + 360 + d.EVC) / 2) % 360, 
+        cond: d.overlap > 0 
+    },
+  ];
+
+  for(let i = 0; i < internalLabels.length; i++) {
+      const lbl = internalLabels[i];
+      if (lbl.cond === false) continue;
+      const [x,y] = getPolarCoords(cx, cy, lbl.r, lbl.angle);
+      ctx.fillText(lbl.text, x, y);
+  }
+
+  // 4. Draw external event labels (anti-overlap logic)
+  const allLabels = [
+      { angle: 360 - d.IVO, text: `${LBL.IVO} ${d.IVO}° BTDC`, color: "#4a9cff", type: 'event' },
+      { angle: 180 + d.IVC, text: `${LBL.IVC} ${d.IVC}° ABDC`, color: "#4a9cff", type: 'event' },
+      { angle: 180 - d.EVO, text: `${LBL.EVO} ${d.EVO}° BBDC`, color: "#ff6b6b", type: 'event' },
+      { angle: d.EVC, text: `${LBL.EVC} ${d.EVC}° ATDC`, color: "#ff6b6b", type: 'event' },
+      { angle: 0, text: LBL.TDC, color: "#333", type: 'marker' },
+      { angle: 180, text: LBL.BDC, color: "#333", type: 'marker' }
+  ];
+
+  for(let i = 0; i < allLabels.length; i++) {
+      allLabels[i].normAngle = allLabels[i].angle % 360;
+      if (allLabels[i].normAngle < 0) allLabels[i].normAngle += 360;
+  }
+  
+  allLabels.sort((a, b) => a.normAngle - b.normAngle);
+
+  const radialOffsets = [R + 30, R + 55, R + 80]; // [Inner, Middle, Outer]
+  const minAngleSeparation = 15; 
+  let lastExtAngle = -minAngleSeparation;
+  let lastExtLevel = 0; 
+
+  for(let i = 0; i < allLabels.length; i++) {
+      const lbl = allLabels[i];
+      let angleDiff = lbl.normAngle - lastExtAngle;
+      if (angleDiff < 0) angleDiff += 360; 
+
+      let currentLevel;
+      if (lbl.type === 'marker') {
+          currentLevel = 2; // Markers (TDC/BDC) always on outer track
+      } else if (angleDiff < minAngleSeparation) {
+          currentLevel = (lastExtLevel === 0) ? 1 : 0; // Alternate tracks if too close
+      } else {
+          currentLevel = 0; // Default to inner track if space
+      }
+      
+      const offset = radialOffsets[currentLevel];
+      
+      // Draw tick mark
+      const [x1, y1] = getPolarCoords(cx, cy, R, lbl.angle);
+      const [x2, y2] = getPolarCoords(cx, cy, (lbl.type === 'marker' ? R + 20 : R + 8), lbl.angle);
+      ctx.strokeStyle = lbl.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      
+      // Draw text
+      ctx.fillStyle = "#111"; ctx.font = `${W*0.014}px system-ui,Segoe UI,Arial`;
+      const [lx, ly] = getPolarCoords(cx, cy, offset, lbl.angle);
+      
+      let textAlign = "start";
+      let textBaseline = "middle";
+      let tweakX = 6;
+      let tweakY = 0;
+
+      // Smart alignment
+      if (lbl.normAngle > 10 && lbl.normAngle < 170) { 
+          textAlign = "start"; 
+      } else if (lbl.normAngle > 190 && lbl.normAngle < 350) { 
+          textAlign = "end";
+          tweakX = -6;
+      } else if (lbl.normAngle <= 10 || lbl.normAngle >= 350) { // Near TDC
+          textAlign = "center";
+          textBaseline = "bottom";
+          tweakX = 0;
+          tweakY = -6; 
+      } else if (lbl.normAngle >= 170 && lbl.normAngle <= 190) { // Near BDC
+          textAlign = "center";
+          textBaseline = "top";
+          tweakX = 0;
+          tweakY = 6; 
+      }
+
+      ctx.textAlign = textAlign;
+      ctx.textBaseline = textBaseline;
+      ctx.fillText(lbl.text, lx + tweakX, ly + tweakY);
+      
+      lastExtAngle = lbl.normAngle;
+      if (lbl.type === 'event') {
+        lastExtLevel = currentLevel;
+      }
+  }
+}
+
+
+// Main function to draw the lift curve
+function drawCurve(d, lang = 'zh', targetCtx = null) {
+  const cv = targetCtx ? targetCtx.canvas : $("curve");
+  const ctx = targetCtx || cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  const LBL = langData[lang].lab;
+  
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+
+  // Top margin for 4 label levels
+  const m = { l: 80, r: 16, t: 80, b: 100 }; 
+  const x0 = m.l, y0 = m.t, x1 = W - m.r, y1 = H - m.b, w = x1 - x0, h = y1 - y0;
+  const maxLiftOverall = Math.max(d.lift_i, d.lift_e, 1);
+
+  function X(theta) { return x0 + ((theta + 360) / 720) * w; }
+  function Y(mm) { return y1 - (mm / maxLiftOverall) * h; }
+
+  // 1. Draw axis and grid
+  ctx.strokeStyle = "#222"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x0, y1); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.stroke();
+  ctx.fillStyle = "#222"; ctx.font = "12px system-ui,Segoe UI,Arial";
+  
+  const xTicks = [-360, -180, 0, 180, 360];
+  for(let i = 0; i < xTicks.length; i++) {
+    const tk = xTicks[i];
+    const xp = X(tk);
+    ctx.strokeStyle = "#eef2f7"; ctx.beginPath(); ctx.moveTo(xp, y0); ctx.lineTo(xp, y1); ctx.stroke();
+    ctx.strokeStyle = "#222"; ctx.beginPath(); ctx.moveTo(xp, y1); ctx.lineTo(xp, y1 + 5); ctx.stroke();
+    ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(String(tk), xp, y1 + 8);
+  }
+  
+  for (let i = 0; i <= 6; i++) {
+    const yy = y1 - (i / 6) * h, val = (maxLiftOverall * i / 6).toFixed(1);
+    ctx.strokeStyle = "#f4f6fb"; ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke();
+    ctx.strokeStyle = "#222"; ctx.beginPath(); ctx.moveTo(x0 - 5, yy); ctx.lineTo(x0, yy); ctx.stroke();
+    ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(val, x0 - 8, yy);
+  }
+  ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+  ctx.fillText(LBL.Degree, x0 + w / 2, H - 4);
+  ctx.save();
+  ctx.translate(20, y0 + h / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(LBL.Lift, 0, 0);
+  ctx.restore();
+
+  // 2. Asymmetrical lift calc
+  function liftAtAsym(theta, start, end, maxLift, degToMax) {
+    if (theta < start || theta > end || degToMax <= 0) return 0;
+    const peakTheta = start + degToMax;
+    const totalDur = end - start;
+    const closingDur = totalDur - degToMax; 
+    
+    if (degToMax >= totalDur || closingDur <= 0) { 
+        const ph = (theta - start) / totalDur; 
+        return (maxLift / 2) * (1 - Math.cos(Math.PI * ph)); 
+    }
+    if (theta <= peakTheta) { 
+        const ph = (theta - start) / degToMax; 
+        return (maxLift / 2) * (1 - Math.cos(Math.PI * ph)); 
+    } else { 
+        const ph = (theta - peakTheta) / closingDur; 
+        return (maxLift / 2) * (1 + Math.cos(Math.PI * ph)); 
+    }
+  }
+  
+  const I_open = -d.IVO, I_close = 180 + d.IVC;
+  const E_open = -180 - d.EVO, E_close = d.EVC;
+  
+  // 3. Draw lift curves
+  function drawCurvePath(start, end, maxLift, degToMax, color) {
+    ctx.lineWidth = 2.5; ctx.strokeStyle = color; ctx.beginPath();
+    let firstPoint = true;
+    for (let th = start; th <= end; th += 1) {
+        const y = liftAtAsym(th, start, end, maxLift, degToMax);
+        const xp = X(th), yp = Y(y);
+        if (firstPoint) { ctx.moveTo(xp, yp); firstPoint = false; } 
+        else { ctx.lineTo(xp, yp); }
+    }
+    ctx.stroke();
+  }
+  drawCurvePath(E_open, E_close, d.lift_e, d.deg_em, "#ff6b6b");
+  drawCurvePath(I_open, I_close, d.lift_i, d.deg_im, "#4a9cff");
+  
+  // 4. Draw duration spans (anti-overlap)
+  const spanLabels = [];
+  function drawSpan(startTheta, endTheta, label, yOffset, color) {
+    const xStart = X(startTheta), xEnd = X(endTheta), yPos = y1 + yOffset, xMid = (xStart + xEnd) / 2;
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(xStart, yPos - 5); ctx.lineTo(xStart, yPos + 5); ctx.moveTo(xStart, yPos); ctx.lineTo(xEnd, yPos); ctx.moveTo(xEnd, yPos - 5); ctx.lineTo(xEnd, yPos + 5); ctx.stroke();
+    ctx.font = "12px system-ui,Segoe UI,Arial"; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(label, xMid, yPos + 8);
+    
+    ctx.font = "11px system-ui,Segoe UI,Arial"; 
+    spanLabels.push({ text: startTheta.toFixed(0) + '°', x: xStart, y: yPos - 7, width: ctx.measureText(startTheta.toFixed(0) + '°').width});
+    spanLabels.push({ text: endTheta.toFixed(0) + '°', x: xEnd, y: yPos - 7, width: ctx.measureText(endTheta.toFixed(0) + '°').width});
+  }
+  const spanY = 40;
+  drawSpan(I_open, I_close, LBL.IntakeDuration(d.idur), spanY, "#4a9cff");
+  drawSpan(E_open, E_close, LBL.ExhaustDuration(d.edur), spanY + 30, "#ff6b6b");
+
+  spanLabels.sort((a,b) => a.x - b.x);
+  let lastX_end = -Infinity;
+  const minSpacing = 5; 
+  ctx.fillStyle = "#333";
+  ctx.font = "11px system-ui,Segoe UI,Arial"; 
+  ctx.textBaseline = "bottom";
+  
+  for(let i = 0; i < spanLabels.length; i++) {
+      const lbl = spanLabels[i];
+      let xPos = lbl.x;
+      let textAlign = 'center';
+      let textStart = xPos - lbl.width / 2;
+      
+      if (textStart < lastX_end + minSpacing) {
+          xPos = lastX_end + minSpacing;
+          textAlign = 'left'; 
+      }
+
+      ctx.textAlign = textAlign; 
+      ctx.fillText(lbl.text, xPos, lbl.y);
+      
+      if (textAlign === 'left') {
+          lastX_end = xPos + lbl.width;
+      } else {
+          lastX_end = xPos + lbl.width / 2;
+      }
+  }
+
+  // 5. Draw overlap indicator
+  if (d.overlap > 0) {
+    const xStart = X(I_open), xEnd = X(E_close);
+    const yPos = Y(maxLiftOverall * 0.55); 
+    const xMid = (xStart + xEnd) / 2;
+    ctx.strokeStyle = "#eab308"; ctx.fillStyle = "#ca8a04"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(xStart, yPos); ctx.lineTo(xEnd, yPos); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xStart + 5, yPos - 4); ctx.lineTo(xStart, yPos); ctx.lineTo(xStart + 5, yPos + 4); ctx.moveTo(xEnd - 5, yPos - 4); ctx.lineTo(xEnd, yPos); ctx.lineTo(xEnd - 5, yPos + 4); ctx.stroke();
+    ctx.font = "12px system-ui,Segoe UI,Arial"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText(LBL.OverlapLabel(d.overlap), xMid, yPos - 6);
+  }
+
+  // 6. Draw all top labels (events + peaks) with anti-overlap stacking
+  
+  // Draw vertical dashed lines first
+  const lineLabels = [
+    {th: -360}, {th: -180}, {th: 0}, {th: 180}, {th: 360},
+    {th: E_open}, {th: I_open}, {th: E_close}, {th: I_close}
+  ];
+  ctx.setLineDash([2, 3]); ctx.strokeStyle = "#999"; ctx.lineWidth = 1;
+  for(let i = 0; i < lineLabels.length; i++) {
+      const x = X(lineLabels[i].th);
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Collect all labels
+  const I_peak_theta = I_open + d.deg_im;
+  const E_peak_theta = E_open + d.deg_em;
+
+  let topLabels = [
+    {th: -360, txt: LBL.TDC, color: "#333", font: "12px system-ui,Segoe UI,Arial", type: 'marker'}, 
+    {th: -180, txt: LBL.BDC, color: "#333", font: "12px system-ui,Segoe UI,Arial", type: 'marker'}, 
+    {th: 0, txt: LBL.TDC, color: "#333", font: "12px system-ui,Segoe UI,Arial", type: 'marker'}, 
+    {th: 180, txt: LBL.BDC, color: "#333", font: "12px system-ui,Segoe UI,Arial", type: 'marker'}, 
+    {th: 360, txt: LBL.TDC, color: "#333", font: "12px system-ui,Segoe UI,Arial", type: 'marker'},
+    {th: E_open, txt: LBL.EVO, color: "#333", font: "12px system-ui,Segoe UI,Arial", type: 'event'}, 
+    {th: I_open, txt: LBL.IVO, color: "#333", font: "12px system-ui,Segoe UI,Arial", type: 'event'}, 
+    {th: E_close, txt: LBL.EVC, color: "#333", font: "12px system-ui,Segoe UI,Arial", type: 'event'}, 
+    {th: I_close, txt: LBL.IVC, color: "#333", font: "12px system-ui,Segoe UI,Arial", type: 'event'},
+  ];
+
+  if(d.deg_im > 0 && I_peak_theta < I_close) {
+      topLabels.push({
+          th: I_peak_theta, 
+          txt: LBL.MaxLiftAt(d.lift_i.toFixed(2), I_peak_theta.toFixed(1)), 
+          color: "#111", 
+          font: "bold 12px system-ui,Segoe UI,Arial",
+          type: 'peak'
+      });
+      // Draw peak line and dot
+      ctx.setLineDash([3, 4]); ctx.strokeStyle = "#4a9cff"; ctx.lineWidth = 1;
+      const xp = X(I_peak_theta);
+      ctx.beginPath(); ctx.moveTo(xp, Y(d.lift_i)); ctx.lineTo(xp, y1); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "#4a9cff"; ctx.beginPath(); ctx.arc(xp, Y(d.lift_i), 4, 0, Math.PI * 2); ctx.fill();
+  }
+  
+  if(d.deg_em > 0 && E_peak_theta < E_close) {
+      topLabels.push({
+          th: E_peak_theta, 
+          txt: LBL.MaxLiftAt(d.lift_e.toFixed(2), E_peak_theta.toFixed(1)), 
+          color: "#111", 
+          font: "bold 12px system-ui,Segoe UI,Arial",
+          type: 'peak'
+      });
+      // Draw peak line and dot
+      ctx.setLineDash([3, 4]); ctx.strokeStyle = "#ff6b6b"; ctx.lineWidth = 1;
+      const xp = X(E_peak_theta);
+      ctx.beginPath(); ctx.moveTo(xp, Y(d.lift_e)); ctx.lineTo(xp, y1); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "#ff6b6b"; ctx.beginPath(); ctx.arc(xp, Y(d.lift_e), 4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Calculate x-coords and width
+  for(let i = 0; i < topLabels.length; i++) {
+      const l = topLabels[i];
+      l.x = X(l.th);
+      ctx.font = l.font; 
+      l.width = ctx.measureText(l.txt).width;
+      l.start = l.x - l.width / 2;
+      l.end = l.x + l.width / 2;
+  }
+  
+  // Filter out labels off-screen
+  topLabels = topLabels.filter(l => l.x >= x0 && l.x <= x1);
+  topLabels.sort((a,b) => a.x - b.x); // Sort by x-position
+
+  // 4-level stacking logic
+  const yOffsets = [y0 - 4, y0 - 18, y0 - 32, y0 - 46]; 
+  const levelEnds = [-Infinity, -Infinity, -Infinity, -Infinity]; 
+  const labelHPadding = 5; 
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+
+  for(let i = 0; i < topLabels.length; i++) {
+      const l = topLabels[i];
+      
+      // Find an available level
+      let level = 0;
+      while (level < yOffsets.length) {
+          if (l.start > levelEnds[level] + labelHPadding) {
+              break; // Found a spot
+          }
+          level++; // Try next level
+      }
+      
+      if (level === yOffsets.length) {
+          level = 0; // Force to level 0 if all are full (will overlap)
+      }
+      
+      // Draw label
+      ctx.fillStyle = l.color;
+      ctx.font = l.font;
+      ctx.fillText(l.txt, l.x, yOffsets[level]);
+      
+      // Update the end position for this level
+      levelEnds[level] = l.end;
+  }
+}
+
+// Main update function
+function update() {
+  const valveData = getValveData();
+  const lang = $("lang").value;
+  updateSummary();
+  drawCurve(valveData, lang);
+  drawCircle(valveData, lang);
+}
+
+// --- EXPORT FUNCTIONS ---
+async function getCanvasAsImage(drawFunction, width, height, filename) {
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = width;
+    offscreenCanvas.height = height;
+    const ctx = offscreenCanvas.getContext('2d');
+    
+    // Always export in English
+    drawFunction(getValveData(), 'en', ctx); 
+
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = offscreenCanvas.toDataURL('image/png');
+    link.click();
+}
+
+$("saveCurve").addEventListener('click', () => getCanvasAsImage(drawCurve, 1100, 720, 'LiftCurve.png'));
+$("saveCircle").addEventListener('click', () => getCanvasAsImage(drawCircle, 900, 900, 'CircularTiming.png'));
+
+$("savePDF").addEventListener('click', async () => {
+  try {
+    if (typeof html2canvas === 'undefined') {
+        alert('PDF library (html2canvas) is not loaded correctly. Please check your internet connection and try again.');
+        return;
+    }
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    const d = getValveData();
+    const t = langData.en; // Always use English for PDF
+
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const m = 40; // margin
+    const contentW = pageW - 2 * m;
+    
+    // --- Page 1: Title, Summary, Calc ---
+    pdf.setFontSize(20).setFont('helvetica', 'bold');
+    pdf.text("Valve Timing Report", pageW / 2, m, { align: 'center' });
+
+    // Snapshot summary card
+    const summaryCard = document.getElementById('summaryCard');
+    const summaryCanvas = await html2canvas(summaryCard, { 
+        scale: 2, 
+        logging: false,
+        useCORS: true,
+        onclone: (clonedDoc) => {
+            // Force english in cloned node for PDF
+            const t_en = langData.en;
+            clonedDoc.getElementById('jadualTitle').textContent = t_en.jadualTitle;
+            clonedDoc.getElementById('calcTitle').textContent = t_en.calcTitle;
+            clonedDoc.getElementById('h_valve').textContent = t_en.h_valve;
+            clonedDoc.getElementById('h_open').textContent = t_en.h_open;
+            clonedDoc.getElementById('h_close').textContent = t_en.h_close;
+            clonedDoc.getElementById('h_in').textContent = t_en.h_in;
+            clonedDoc.getElementById('h_ex').textContent = t_en.h_ex;
+            
+            clonedDoc.getElementById('td_ivo').textContent = `${d.IVO}° BTDC`;
+            clonedDoc.getElementById('td_ivc').textContent = `${d.IVC}° ABDC`;
+            clonedDoc.getElementById('td_evo').textContent = `${d.EVO}° BBDC`;
+            clonedDoc.getElementById('td_evc').textContent = `${d.EVC}° ATDC`;
+            
+            const details = clonedDoc.getElementById('calcDetails');
+            details.innerHTML = `
+                <div class="calc-item"><p class="formula">${t_en.formula_intake}</p><p class="calculation">= 180° + ${d.IVO}° + ${d.IVC}° <strong>= ${d.idur}°</strong></p></div>
+                <div class="calc-item"><p class="formula">${t_en.formula_exhaust}</p><p class="calculation">= 180° + ${d.EVO}° + ${d.EVC}° <strong>= ${d.edur}°</strong></p></div>
+                <div class="calc-item"><p class="formula">${t_en.formula_comp}</p><p class="calculation">= 180° - ${d.IVC}° <strong>= ${d.compDur > 0 ? d.compDur : 0}°</strong></p></div>
+                <div class="calc-item"><p class="formula">${t_en.formula_power}</p><p class="calculation">= 180° - ${d.EVO}° <strong>= ${d.powerDur > 0 ? d.powerDur : 0}°</strong></p></div>
+                <div class="calc-item"><p class="formula">${t_en.formula_overlap}</p><p class="calculation">= ${d.IVO}° + ${d.EVC}° <strong>= ${d.overlap}°</strong></p></div>
+            `;
+        }
+    });
+    const summaryImgData = summaryCanvas.toDataURL('image/png');
+    const summaryImgProps = pdf.getImageProperties(summaryImgData);
+    let summaryImgHeight = (summaryImgProps.height * contentW) / summaryImgProps.width;
+    let summaryImgWidth = contentW;
+    const summaryY = m + 30;
+    const availableHeight = pageH - summaryY - m; 
+
+    // PDF Page 1 Fit-to-Page logic
+    if (summaryImgHeight > availableHeight) {
+        // If image is too tall, scale it down to fit
+        const oldHeight = summaryImgHeight;
+        summaryImgHeight = availableHeight;
+        summaryImgWidth = (summaryImgWidth * summaryImgHeight) / oldHeight;
+    }
+    
+    const summaryX = (pageW - summaryImgWidth) / 2; // Center horizontally
+    pdf.addImage(summaryImgData, 'PNG', summaryX, summaryY, summaryImgWidth, summaryImgHeight);
+    
+    // --- Page 2: Circular Diagram ---
+    pdf.addPage();
+    pdf.setFontSize(16).setFont('helvetica', 'bold');
+    pdf.text(t.t1, pageW / 2, m, { align: 'center' });
+    const circleCanvas = document.createElement('canvas');
+    circleCanvas.width = 900; circleCanvas.height = 900;
+    drawCircle(d, 'en', circleCanvas.getContext('2d'));
+    const circleImg = circleCanvas.toDataURL('image/png');
+    const circH = contentW * (circleCanvas.height / circleCanvas.width);
+    pdf.addImage(circleImg, 'PNG', m, m + 20, contentW, circH);
+
+    // --- Page 3: Lift Curve ---
+    pdf.addPage();
+    pdf.setFontSize(16).setFont('helvetica', 'bold');
+    pdf.text(t.t2, pageW / 2, m, { align: 'center' });
+    const curveCanvas = document.createElement('canvas');
+    curveCanvas.width = 1100; curveCanvas.height = 720;
+    drawCurve(d, 'en', curveCanvas.getContext('2d'));
+    const curveImg = curveCanvas.toDataURL('image/png');
+    const curveH = contentW * (curveCanvas.height / curveCanvas.width);
+    pdf.addImage(curveImg, 'PNG', m, m + 20, contentW, curveH);
+
+    pdf.save('ValveTimingReport.pdf');
+  } catch (err) { 
+    console.error('PDF Export Error:', err); 
+    alert('导出 PDF 失败 (Failed to export PDF). Error: ' + err.message); 
+  }
+});
+
+
+// --- INIT & EVENT LISTENERS ---
+const inputIds = ["ivo", "ivc", "evo", "evc", "lift_i", "deg_im", "lift_e", "deg_em"];
+for(let i = 0; i < inputIds.length; i++) {
+    $(inputIds[i]).addEventListener('input', () => { 
+        if ($("auto").checked) {
+            update(); 
+        }
+    });
+}
+$("gen").addEventListener('click', update);
+$("lang").addEventListener('change', () => setLang($("lang").value));
+
+// Initial load
+setLang("zh");
+</script>
+
+<!-- Required JS Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+</body>
+</html>
+
